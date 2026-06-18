@@ -1,26 +1,60 @@
-echo "=== IP ==="
-ip -br addr
+sudo bash -c '
+ARQ="/tmp/diagnostico-coolify-$(date +%Y%m%d-%H%M%S).txt"
 
-echo "=== ROTA ==="
-ip route
+{
+  echo "===== DATA ====="
+  date
 
-echo "=== DNS ==="
-cat /etc/resolv.conf
+  echo
+  echo "===== SISTEMA ====="
+  hostnamectl
+  cat /etc/os-release
+  uname -a
 
-echo "=== TESTE GATEWAY ==="
-GATEWAY=$(ip route | awk '/default/ {print $3; exit}')
-echo "Gateway: $GATEWAY"
-ping -c 4 "$GATEWAY"
+  echo
+  echo "===== REDE ====="
+  ip -br addr
+  ip route
+  cat /etc/resolv.conf
 
-echo "=== TESTE INTERNET POR IP ==="
-ping -c 4 1.1.1.1
+  echo
+  echo "===== TESTES DE CONECTIVIDADE ====="
+  ping -c 4 1.1.1.1 || true
+  getent hosts cdn.coollabs.io || true
+  curl -Iv --connect-timeout 20 https://cdn.coollabs.io/coolify/install.sh || true
 
-echo "=== TESTE DNS ==="
-getent hosts cdn.coollabs.io
-getent hosts google.com
+  echo
+  echo "===== PORTAS ====="
+  ss -lntp
 
-echo "=== TESTE HTTPS ==="
-curl -Iv --connect-timeout 15 https://cdn.coollabs.io/coolify/install.sh
+  echo
+  echo "===== DOCKER ====="
+  docker version 2>&1 || true
+  docker ps -a 2>&1 || true
 
-echo "=== TESTE HTTPS ALTERNATIVO ==="
-curl -Iv --connect-timeout 15 https://github.com
+  echo
+  echo "===== SERVIÇOS ====="
+  systemctl status docker --no-pager 2>&1 || true
+  systemctl status ssh --no-pager 2>&1 || true
+  systemctl status qemu-guest-agent --no-pager 2>&1 || true
+
+  echo
+  echo "===== JOURNAL DOCKER ====="
+  journalctl -u docker --no-pager -n 300 2>&1 || true
+
+  echo
+  echo "===== JOURNAL QEMU AGENT ====="
+  journalctl -u qemu-guest-agent --no-pager -n 200 2>&1 || true
+
+  echo
+  echo "===== LOG DO SCRIPT ====="
+  cat /var/log/instalar-coolify.log 2>&1 || true
+
+  echo
+  echo "===== LOGS COOLIFY ====="
+  find /data/coolify -type f -name "*.log" -maxdepth 5 -print 2>/dev/null || true
+} > "$ARQ" 2>&1
+
+chmod 644 "$ARQ"
+echo "Arquivo criado em: $ARQ"
+'
